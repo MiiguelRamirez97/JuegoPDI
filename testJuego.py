@@ -1,16 +1,18 @@
 import pygame
 import sys
 import random
+import cv2
+import numpy as np
 
 # Inicializa Pygame
 pygame.init()
 
 # Constantes
 SCREEN_SIZE = (700, 500)
-BIRD_SIZE = (50, 50)
+BIRD_SIZE = (30, 30)
 PIPE_WIDTH = 80
 GRAVITY = 8
-BIRD_JUMP = -35
+BIRD_JUMP = -25
 PIPE_SPEED = -5
 PIPE_GAP = 100
 PIPE_FREQUENCY = 100
@@ -28,6 +30,17 @@ bird = pygame.Rect(100, 250, *BIRD_SIZE)
 # Inicializa el contador de puntuación
 score = 0
 
+# Inicializa la captura de video con OpenCV
+cap = cv2.VideoCapture(0)  # 0 es generalmente la cámara por defect
+
+width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+screen = pygame.display.set_mode((width, height))
+
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+eyes_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
+
 # Define una función para generar tuberías
 def generate_pipe():
     height = random.randint(100, 300)  # Limita la altura máxima de la tubería
@@ -43,6 +56,25 @@ def handle_input():
             sys.exit()
         elif event.type == pygame.KEYDOWN and event.key == pygame.K_UP:
             bird.move_ip(0, BIRD_JUMP)
+    # Capture a frame from the camera
+    ret, frame = cap.read()
+    if not ret:
+        return
+
+    # Convert the frame to grayscale
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    # Detect faces in the image
+    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+
+    for (x, y, w, h) in faces:
+        roi_gray = gray[y:y+h, x:x+w]
+        roi_color = frame[y:y+h, x:x+w]
+
+        # Detect eyes in the face
+        eyes = eyes_cascade.detectMultiScale(roi_gray)
+        if len(eyes) < 2:
+            bird.move_ip(0, BIRD_JUMP)  # Make the bird jump when a blink is detected
 
 # Define una función para mover las tuberías
 def move_pipes():
@@ -81,6 +113,23 @@ while True:
 
     # Dibuja todo
     screen.fill((0, 0, 0))
+
+    # Capture a frame from the camera
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    # Convert the frame from BGR to RGB
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    frame = cv2.resize(frame, (width, height))
+
+    # Convert the frame into a Pygame surface
+    frame = pygame.surfarray.make_surface(np.rot90(frame))
+
+    # Draw the frame on the screen
+    screen.blit(frame, (0, 0))
+
     pygame.draw.rect(screen, (255, 0, 0), bird)
     for pipe in pipes:
         pygame.draw.rect(screen, (0, 255, 0), pipe)
